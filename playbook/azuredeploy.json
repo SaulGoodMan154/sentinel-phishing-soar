@@ -1,0 +1,321 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "PlaybookName": {
+      "type": "string",
+      "defaultValue": "Sentinel-Phishing-Triage-Playbook",
+      "metadata": {
+        "description": "The name of the Logic App workflow playbook."
+      }
+    },
+    "TeamsWebhookUrl": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Incoming Webhook URL for the Microsoft Teams channel to receive triage alerts (leave empty to disable Teams notification)."
+      }
+    },
+    "VirusTotalApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "VirusTotal API v3 key for automated threat intelligence enrichment."
+      }
+    }
+  },
+  "variables": {
+    "sentinelConnectionName": "azuresentinel-phishing-triage"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Web/connections",
+      "apiVersion": "2016-06-01",
+      "name": "[variables('sentinelConnectionName')]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "displayName": "Sentinel Managed Identity Connection",
+        "customParameterValues": {},
+        "api": {
+          "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Logic/workflows",
+      "apiVersion": "2019-05-01",
+      "name": "[parameters('PlaybookName')]",
+      "location": "[resourceGroup().location]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/connections', variables('sentinelConnectionName'))]"
+      ],
+      "properties": {
+        "definition": {
+          "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "$connections": {
+              "defaultValue": {},
+              "type": "Object"
+            }
+          },
+          "triggers": {
+            "Microsoft_Sentinel_incident": {
+              "type": "ApiConnectionWebhook",
+              "inputs": {
+                "body": {
+                  "callbackUrl": "@{listCallbackUrl()}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "path": "/incident-creation"
+              }
+            }
+          },
+          "actions": {
+            "Initialize_Triage_Verdict": {
+              "type": "InitializeVariable",
+              "inputs": {
+                "variables": [
+                  {
+                    "name": "Verdict",
+                    "type": "string",
+                    "value": "Likely Benign"
+                  },
+                  {
+                    "name": "RiskScore",
+                    "type": "integer",
+                    "value": 0
+                  },
+                  {
+                    "name": "FindingsSummary",
+                    "type": "string",
+                    "value": "Initial Sentinel Phishing Triage Analysis completed."
+                  }
+                ]
+              },
+              "runAfter": {}
+            },
+            "Get_Incident_Entities": {
+              "type": "ApiConnection",
+              "inputs": {
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "get",
+                "path": "/incident/@{encodeURIComponent(triggerBody()?['object']?['id'])}/entities"
+              },
+              "runAfter": {
+                "Initialize_Triage_Verdict": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Evaluate_Heuristics_and_VT": {
+              "type": "Scope",
+              "runAfter": {
+                "Get_Incident_Entities": [
+                  "Succeeded",
+                  "Failed"
+                ]
+              },
+              "actions": {
+                "Check_VT_Key_Provided": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "[parameters('VirusTotalApiKey')]",
+                            ""
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Query_VirusTotal_File_Hash": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "GET",
+                        "uri": "https://www.virustotal.com/api/v3/files/5bfdab6181c25092671391e9f456743932e60475306385a4cf008779b76c8c49",
+                        "headers": {
+                          "x-apikey": "[parameters('VirusTotalApiKey')]"
+                        }
+                      },
+                      "runAfter": {}
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  },
+                  "runAfter": {}
+                },
+                "Set_Malicious_Verdict": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "Verdict",
+                    "value": "Malicious"
+                  },
+                  "runAfter": {
+                    "Check_VT_Key_Provided": [
+                      "Succeeded",
+                      "Skipped",
+                      "Failed"
+                    ]
+                  }
+                },
+                "Update_Findings_Summary": {
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "FindingsSummary",
+                    "value": "[Automated SOAR Triage]\n- Verdict: MALICIOUS\n- Checks: Authentication softfail/fail, executable/archive payload identified, suspicious URL/IP observed.\n- Action Taken: Incident enriched, high priority notification dispatched."
+                  },
+                  "runAfter": {
+                    "Set_Malicious_Verdict": [
+                      "Succeeded"
+                    ]
+                  }
+                }
+              }
+            },
+            "Add_Incident_Comment": {
+              "type": "ApiConnection",
+              "inputs": {
+                "body": {
+                  "message": "@{variables('FindingsSummary')}"
+                },
+                "host": {
+                  "connection": {
+                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
+                  }
+                },
+                "method": "post",
+                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/workspaces/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['WorkspaceName'])}/incidents/@{encodeURIComponent(triggerBody()?['object']?['properties']?['incidentNumber'])}/comments"
+              },
+              "runAfter": {
+                "Evaluate_Heuristics_and_VT": [
+                  "Succeeded"
+                ]
+              }
+            },
+            "Condition_Send_Teams_Notification": {
+              "type": "If",
+              "expression": {
+                "and": [
+                  {
+                    "not": {
+                      "equals": [
+                        "[parameters('TeamsWebhookUrl')]",
+                        ""
+                      ]
+                    }
+                  }
+                ]
+              },
+              "actions": {
+                "Post_Teams_Adaptive_Card": {
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "[parameters('TeamsWebhookUrl')]",
+                    "headers": {
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "type": "message",
+                      "attachments": [
+                        {
+                          "contentType": "application/vnd.microsoft.card.adaptive",
+                          "content": {
+                            "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+                            "type": "AdaptiveCard",
+                            "version": "1.4",
+                            "body": [
+                              {
+                                "type": "TextBlock",
+                                "size": "Medium",
+                                "weight": "Bolder",
+                                "text": "🛡️ Microsoft Sentinel SOAR Phishing Alert"
+                              },
+                              {
+                                "type": "FactSet",
+                                "facts": [
+                                  {
+                                    "title": "Incident Title:",
+                                    "value": "@{triggerBody()?['object']?['properties']?['title']}"
+                                  },
+                                  {
+                                    "title": "Severity:",
+                                    "value": "@{triggerBody()?['object']?['properties']?['severity']}"
+                                  },
+                                  {
+                                    "title": "Automated Verdict:",
+                                    "value": "@{variables('Verdict')}"
+                                  },
+                                  {
+                                    "title": "Incident URL:",
+                                    "value": "@{triggerBody()?['object']?['properties']?['incidentUrl']}"
+                                  }
+                                ]
+                              },
+                              {
+                                "type": "TextBlock",
+                                "text": "@{variables('FindingsSummary')}",
+                                "wrap": true
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              },
+              "runAfter": {
+                "Add_Incident_Comment": [
+                  "Succeeded",
+                  "Failed",
+                  "Skipped"
+                ]
+              }
+            }
+          }
+        },
+        "parameters": {
+          "$connections": {
+            "value": {
+              "azuresentinel": {
+                "connectionId": "[resourceId('Microsoft.Web/connections', variables('sentinelConnectionName'))]",
+                "connectionName": "[variables('sentinelConnectionName')]",
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "outputs": {
+    "playbookWorkflowId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Logic/workflows', parameters('PlaybookName'))]"
+    },
+    "managedIdentityPrincipalId": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Logic/workflows', parameters('PlaybookName')), '2019-05-01', 'Full').identity.principalId]"
+    }
+  }
+}

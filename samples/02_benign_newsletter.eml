@@ -1,0 +1,37 @@
+From: "Cyber Defense Weekly" <newsletter@cyberdefense-weekly.org>
+To: subscriber@corporate-domain.com
+Subject: Cyber Defense Weekly: Issue #104 - Modern SOC Triage Strategies
+Date: Sun, 15 Nov 2026 12:00:00 +0000
+Message-ID: <20261115120000.8872.news@cyberdefense-weekly.org>
+Reply-To: newsletter@cyberdefense-weekly.org
+Return-Path: <bounces@cyberdefense-weekly.org>
+Authentication-Results: mx.corporate-domain.com;
+ spf=pass (sender IP 198.51.100.25) smtp.mailfrom=bounces@cyberdefense-weekly.org;
+ dkim=pass header.i=@cyberdefense-weekly.org header.s=k1;
+ dmarc=pass (p=reject sp=reject dis=none) header.from=cyberdefense-weekly.org
+Received-SPF: pass (mx.corporate-domain.com: domain of bounces@cyberdefense-weekly.org designates 198.51.100.25 as permitted sender)
+Received: from mail.cyberdefense-weekly.org (mail.cyberdefense-weekly.org [198.51.100.25])
+ by mx.corporate-domain.com with ESMTP id DEF9876543
+ for <subscriber@corporate-domain.com>; Sun, 15 Nov 2026 12:00:04 +0000
+MIME-Version: 1.0
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: 7bit
+
+<!DOCTYPE html>
+<html>
+<head>
+<title>Cyber Defense Weekly</title>
+</head>
+<body>
+<h2>Welcome to Issue #104 of Cyber Defense Weekly</h2>
+<p>In this edition, we explore modern security operations center (SOC) triage playbooks, detection engineering, and automation.</p>
+<h3>Featured Articles</h3>
+<ul>
+  <li><a href="https://cyberdefense-weekly.org/articles/issue-104-soc-playbooks">Streamlining Phishing Analysis with Heuristic Engines</a></li>
+  <li><a href="https://cyberdefense-weekly.org/articles/issue-104-cloud-soar">Microsoft Sentinel Automation Rules and Cost Controls</a></li>
+</ul>
+<p>If you no longer wish to receive this newsletter, you can <a href="https://cyberdefense-weekly.org/preferences/unsubscribe">unsubscribe here</a>.</p>
+<hr>
+<p>&copy; 2026 Cyber Defense Media LLC. All rights reserved.</p>
+</body>
+</html>

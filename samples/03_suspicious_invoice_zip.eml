@@ -1,0 +1,50 @@
+From: "Global Vendor Billing" <billing@trusted-vendor.com>
+To: accounts-payable@corporate-domain.com
+Subject: OVERDUE NOTICE: Outstanding Invoice INV-89211 - Immediate Settlement Required
+Date: Mon, 16 Nov 2026 10:15:00 +0000
+Message-ID: <20261116101500.54321.invoicing@trusted-vendor.com>
+Reply-To: billing-escalation@suspicious-collections-portal.biz
+Return-Path: <mailer-daemon@untrusted-relay-host.net>
+Authentication-Results: mx.corporate-domain.com;
+ spf=softfail (sender IP 203.0.113.88) smtp.mailfrom=untrusted-relay-host.net;
+ dkim=none (no signature found);
+ dmarc=none (p=none dis=none) header.from=trusted-vendor.com
+Received-SPF: softfail (mx.corporate-domain.com: transitioning domain of untrusted-relay-host.net does not designate 203.0.113.88 as permitted sender)
+Received: from unknown-server.untrusted-relay-host.net (unknown-server.untrusted-relay-host.net [203.0.113.88])
+ by mx.corporate-domain.com with ESMTP id GHI4567890
+ for <accounts-payable@corporate-domain.com>; Mon, 16 Nov 2026 10:15:05 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_NextPart_000_02E8A541"
+
+This is a multi-part message in MIME format.
+
+------=_NextPart_000_02E8A541
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: 7bit
+
+Attn: Accounts Payable Department,
+
+Our records indicate that invoice #INV-89211 remains unpaid past the 30-day term.
+A late surcharge has been applied.
+
+Please find the detailed breakdown and wire remittance instructions in the attached archive:
+Invoice_INV89211.zip
+
+To avoid credit hold and legal escalation, remit payment before close of business today.
+
+Sincerely,
+Accounts Receivable & Billing Operations
+Global Vendor Logistics
+
+------=_NextPart_000_02E8A541
+Content-Type: application/zip; name="Invoice_INV89211.zip"
+Content-Disposition: attachment; filename="Invoice_INV89211.zip"
+Content-Transfer-Encoding: base64
+
+UEsDBBQAAAAIAKVf/1YAAAAAAAAAAAAAAAAYAAAAc2FtcGxlX2ZhY2tlZF9pbnZvaWNlLnR4
+dEvOSMzLS1UoSi0sSk1RyMsvydXLT0rNTS1WSM7P1yvISc1LLVbIT1MwNNAzNDBSMDYy0zcy
+0TM0VihKzEupVFCPiVfQUfBw9nF1dQQAUEsBAhQAFAAAAAgApV//VgAAAAAAAAAAAAAAABgA
+AAAAAAAAAQAgAAAAAAAAAHNhbXBsZV9mYWtlZF9pbnZvaWNlLnR4dFBLBQYAAAAAAQABAE4A
+AABkAAAAAAA=
+
+------=_NextPart_000_02E8A541--
