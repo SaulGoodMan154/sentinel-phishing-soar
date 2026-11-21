@@ -13,7 +13,7 @@
       "type": "securestring",
       "defaultValue": "",
       "metadata": {
-        "description": "Incoming Webhook URL for the Microsoft Teams channel to receive triage alerts (leave empty to disable Teams notification)."
+        "description": "Incoming Webhook URL for Microsoft Teams channel alerting (leave blank to skip)."
       }
     },
     "VirusTotalApiKey": {
@@ -94,37 +94,24 @@
                     "value": 0
                   },
                   {
+                    "name": "EnrichedEntitiesCount",
+                    "type": "integer",
+                    "value": 0
+                  },
+                  {
                     "name": "FindingsSummary",
                     "type": "string",
-                    "value": "Initial Sentinel Phishing Triage Analysis completed."
+                    "value": "Initial Sentinel Phishing Triage Analysis initiated."
                   }
                 ]
               },
               "runAfter": {}
             },
-            "Get_Incident_Entities": {
-              "type": "ApiConnection",
-              "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                  }
-                },
-                "method": "get",
-                "path": "/incident/@{encodeURIComponent(triggerBody()?['object']?['id'])}/entities"
-              },
-              "runAfter": {
-                "Initialize_Triage_Verdict": [
-                  "Succeeded"
-                ]
-              }
-            },
             "Evaluate_Heuristics_and_VT": {
               "type": "Scope",
               "runAfter": {
-                "Get_Incident_Entities": [
-                  "Succeeded",
-                  "Failed"
+                "Initialize_Triage_Verdict": [
+                  "Succeeded"
                 ]
               },
               "actions": {
@@ -143,13 +130,102 @@
                     ]
                   },
                   "actions": {
-                    "Query_VirusTotal_File_Hash": {
-                      "type": "Http",
-                      "inputs": {
-                        "method": "GET",
-                        "uri": "https://www.virustotal.com/api/v3/files/5bfdab6181c25092671391e9f456743932e60475306385a4cf008779b76c8c49",
-                        "headers": {
-                          "x-apikey": "[parameters('VirusTotalApiKey')]"
+                    "For_Each_Incident_Entity": {
+                      "type": "Foreach",
+                      "foreach": "@coalesce(triggerBody()?['object']?['properties']?['relatedEntities'], json('[]'))",
+                      "actions": {
+                        "Switch_Entity_Kind": {
+                          "type": "Switch",
+                          "expression": "@toLower(coalesce(item()?['kind'], 'unknown'))",
+                          "cases": {
+                            "Case_FileHash": {
+                              "case": "filehash",
+                              "actions": {
+                                "Query_VT_FileHash": {
+                                  "type": "Http",
+                                  "inputs": {
+                                    "method": "GET",
+                                    "uri": "@concat('https://www.virustotal.com/api/v3/files/', coalesce(item()?['properties']?['fileHashValue'], item()?['properties']?['hashValue']))",
+                                    "headers": {
+                                      "x-apikey": "[parameters('VirusTotalApiKey')]"
+                                    }
+                                  },
+                                  "runAfter": {}
+                                },
+                                "Increment_Enriched_Count_File": {
+                                  "type": "IncrementVariable",
+                                  "inputs": {
+                                    "name": "EnrichedEntitiesCount",
+                                    "value": 1
+                                  },
+                                  "runAfter": {
+                                    "Query_VT_FileHash": [
+                                      "Succeeded",
+                                      "Failed"
+                                    ]
+                                  }
+                                },
+                                "Set_Verdict_Malicious_File": {
+                                  "type": "SetVariable",
+                                  "inputs": {
+                                    "name": "Verdict",
+                                    "value": "Malicious"
+                                  },
+                                  "runAfter": {
+                                    "Increment_Enriched_Count_File": [
+                                      "Succeeded"
+                                    ]
+                                  }
+                                }
+                              }
+                            },
+                            "Case_IP": {
+                              "case": "ip",
+                              "actions": {
+                                "Query_VT_IP": {
+                                  "type": "Http",
+                                  "inputs": {
+                                    "method": "GET",
+                                    "uri": "@concat('https://www.virustotal.com/api/v3/ip_addresses/', item()?['properties']?['address'])",
+                                    "headers": {
+                                      "x-apikey": "[parameters('VirusTotalApiKey')]"
+                                    }
+                                  },
+                                  "runAfter": {}
+                                },
+                                "Increment_Enriched_Count_IP": {
+                                  "type": "IncrementVariable",
+                                  "inputs": {
+                                    "name": "EnrichedEntitiesCount",
+                                    "value": 1
+                                  },
+                                  "runAfter": {
+                                    "Query_VT_IP": [
+                                      "Succeeded",
+                                      "Failed"
+                                    ]
+                                  }
+                                }
+                              }
+                            },
+                            "Case_URL": {
+                              "case": "url",
+                              "actions": {
+                                "Increment_Enriched_Count_URL": {
+                                  "type": "IncrementVariable",
+                                  "inputs": {
+                                    "name": "EnrichedEntitiesCount",
+                                    "value": 1
+                                  },
+                                  "runAfter": {}
+                                }
+                              }
+                            }
+                          },
+                          "default": {
+                            "actions": {}
+                          },
+                          "runAfter": {}
                         }
                       },
                       "runAfter": {}
@@ -160,11 +236,11 @@
                   },
                   "runAfter": {}
                 },
-                "Set_Malicious_Verdict": {
+                "Update_Findings_Summary": {
                   "type": "SetVariable",
                   "inputs": {
-                    "name": "Verdict",
-                    "value": "Malicious"
+                    "name": "FindingsSummary",
+                    "value": "@concat('[Automated SOAR Triage]\n- Incident: ', coalesce(triggerBody()?['object']?['properties']?['title'], 'Phishing Incident'), '\n- Severity: ', coalesce(triggerBody()?['object']?['properties']?['severity'], 'Medium'), '\n- Automated Verdict: ', variables('Verdict'), '\n- Dynamic Entities Enriched: ', string(variables('EnrichedEntitiesCount')), '\n- Threat Intel: VirusTotal v3 inspection completed across incident entities.')"
                   },
                   "runAfter": {
                     "Check_VT_Key_Provided": [
@@ -173,38 +249,28 @@
                       "Failed"
                     ]
                   }
-                },
-                "Update_Findings_Summary": {
-                  "type": "SetVariable",
-                  "inputs": {
-                    "name": "FindingsSummary",
-                    "value": "[Automated SOAR Triage]\n- Verdict: MALICIOUS\n- Checks: Authentication softfail/fail, executable/archive payload identified, suspicious URL/IP observed.\n- Action Taken: Incident enriched, high priority notification dispatched."
-                  },
-                  "runAfter": {
-                    "Set_Malicious_Verdict": [
-                      "Succeeded"
-                    ]
-                  }
                 }
               }
             },
             "Add_Incident_Comment": {
               "type": "ApiConnection",
               "inputs": {
-                "body": {
-                  "message": "@{variables('FindingsSummary')}"
-                },
                 "host": {
                   "connection": {
                     "name": "@parameters('$connections')['azuresentinel']['connectionId']"
                   }
                 },
                 "method": "post",
-                "path": "/Incidents/subscriptions/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['SubscriptionId'])}/resourceGroups/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['ResourceGroupName'])}/workspaces/@{encodeURIComponent(triggerBody()?['workspaceInfo']?['WorkspaceName'])}/incidents/@{encodeURIComponent(triggerBody()?['object']?['properties']?['incidentNumber'])}/comments"
+                "path": "/Incidents/Comment",
+                "body": {
+                  "incidentArmId": "@triggerBody()?['object']?['id']",
+                  "message": "@variables('FindingsSummary')"
+                }
               },
               "runAfter": {
                 "Evaluate_Heuristics_and_VT": [
-                  "Succeeded"
+                  "Succeeded",
+                  "Failed"
                 ]
               }
             },
@@ -261,6 +327,10 @@
                                   {
                                     "title": "Automated Verdict:",
                                     "value": "@{variables('Verdict')}"
+                                  },
+                                  {
+                                    "title": "Entities Enriched:",
+                                    "value": "@{variables('EnrichedEntitiesCount')}"
                                   },
                                   {
                                     "title": "Incident URL:",
