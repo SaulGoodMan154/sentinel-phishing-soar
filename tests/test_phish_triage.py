@@ -52,7 +52,8 @@ class TestSampleTriageVerdicts(unittest.TestCase):
         result = analyzer.evaluate_verdict()
 
         self.assertEqual(result["verdict"], "malicious")
-        self.assertGreaterEqual(result["risk_score"], 50)
+        self.assertEqual(result["risk_score"], 100)
+        self.assertEqual(result["raw_score"], 255)
 
         # Verify authentication failures
         auth = result["extracted"]["authentication"]
@@ -85,7 +86,8 @@ class TestSampleTriageVerdicts(unittest.TestCase):
         result = analyzer.evaluate_verdict()
 
         self.assertEqual(result["verdict"], "likely_benign")
-        self.assertLess(result["risk_score"], 25)
+        self.assertEqual(result["risk_score"], 0)
+        self.assertEqual(result["raw_score"], 0)
 
         # Verify auth pass
         auth = result["extracted"]["authentication"]
@@ -112,7 +114,8 @@ class TestSampleTriageVerdicts(unittest.TestCase):
 
         # Expected: malicious or suspicious (softfail + zip + mismatch)
         self.assertIn(result["verdict"], ["malicious", "suspicious"])
-        self.assertGreaterEqual(result["risk_score"], 25)
+        self.assertEqual(result["risk_score"], 100)
+        self.assertEqual(result["raw_score"], 100)
 
         auth = result["extracted"]["authentication"]
         self.assertEqual(auth["spf"], "softfail")
@@ -141,6 +144,7 @@ class TestReportGeneration(unittest.TestCase):
 
         self.assertIn("# Phishing Triage Report", md)
         self.assertIn("🔴 **MALICIOUS**", md)
+        self.assertIn("- **Risk Score**: `100/100` (Raw Score: `255`)", md)
         self.assertIn("## Key Triage Triggers", md)
         self.assertIn("## Authentication Breakdown", md)
         self.assertIn("## Attachments", md)

@@ -400,12 +400,16 @@ class EmailTriageAnalyzer:
         else:
             verdict = "likely_benign"
 
+        raw_score = score
+        capped_score = min(score, 100)
+
         self.triage_result = {
             "file": self.filename,
             "subject": headers.get("Subject", ""),
             "sender": headers.get("From", ""),
             "verdict": verdict,
-            "risk_score": score,
+            "risk_score": capped_score,
+            "raw_score": raw_score,
             "reasons": reasons,
             "extracted": self.extracted,
             "timestamp": datetime.now(timezone.utc).isoformat()
@@ -584,7 +588,7 @@ def generate_markdown_report(result: dict, enrichment: dict = None) -> str:
     md.append(f"# Phishing Triage Report: `{base_name}`")
     md.append(f"\n- **Generated At**: {result.get('timestamp')}")
     md.append(f"- **Verdict**: {verdict_badge}")
-    md.append(f"- **Risk Score**: `{result.get('risk_score')}`")
+    md.append(f"- **Risk Score**: `{result.get('risk_score')}/100` (Raw Score: `{result.get('raw_score', result.get('risk_score'))}`)")
     md.append(f"- **Subject**: `{headers.get('Subject', 'None')}`")
     md.append(f"- **Sender**: `{headers.get('From', 'None')}`")
     md.append(f"- **Reply-To**: `{headers.get('reply_to_email') or 'None'}`")
@@ -751,7 +755,7 @@ def main():
             "likely_benign": "[LIKELY_BENIGN]"
         }.get(verdict, f"[{verdict.upper()}]")
 
-        print(f"-> {p.name:<38} | Verdict: {badge:<16} | Score: {result['risk_score']:<3}")
+        print(f"-> {p.name:<38} | Verdict: {badge:<16} | Score: {result['risk_score']}/100 (raw: {result.get('raw_score', result['risk_score'])})")
         if result["reasons"]:
             print(f"   Triggers: {', '.join(result['reasons'])}")
 
@@ -782,7 +786,7 @@ def main():
         smf.write("|---|---|---:|---|\n")
         for s in summary_list:
             reasons_str = "; ".join(s.get("reasons", [])) or "None"
-            smf.write(f"| `{os.path.basename(s['file'])}` | **{s['verdict'].upper()}** | {s['risk_score']} | {reasons_str} |\n")
+            smf.write(f"| `{os.path.basename(s['file'])}` | **{s['verdict'].upper()}** | {s['risk_score']}/100 | {reasons_str} |\n")
 
     print("-" * 70)
     print(f"[+] Triage complete. Summary written to {summary_path_md}")
