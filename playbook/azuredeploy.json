@@ -9,6 +9,13 @@
         "description": "The name of the Logic App workflow playbook."
       }
     },
+    "KeyVaultName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Optional Azure Key Vault name storing the 'VirusTotalApiKey' secret. When provided, the Logic App retrieves the secret via Managed Identity."
+      }
+    },
     "TeamsWebhookUrl": {
       "type": "securestring",
       "defaultValue": "",
@@ -20,7 +27,7 @@
       "type": "securestring",
       "defaultValue": "",
       "metadata": {
-        "description": "VirusTotal API v3 key for automated threat intelligence enrichment."
+        "description": "VirusTotal API v3 key for threat intelligence enrichment (can be left blank if KeyVaultName is provided)."
       }
     }
   },
@@ -60,6 +67,18 @@
             "$connections": {
               "defaultValue": {},
               "type": "Object"
+            },
+            "KeyVaultName": {
+              "type": "String",
+              "defaultValue": ""
+            },
+            "TeamsWebhookUrl": {
+              "type": "SecureString",
+              "defaultValue": ""
+            },
+            "VirusTotalApiKey": {
+              "type": "SecureString",
+              "defaultValue": ""
             }
           },
           "triggers": {
@@ -79,19 +98,14 @@
             }
           },
           "actions": {
-            "Initialize_Triage_Verdict": {
+            "Initialize_Triage_Variables": {
               "type": "InitializeVariable",
               "inputs": {
                 "variables": [
                   {
                     "name": "Verdict",
                     "type": "string",
-                    "value": "Likely Benign"
-                  },
-                  {
-                    "name": "RiskScore",
-                    "type": "integer",
-                    "value": 0
+                    "value": "Not enriched"
                   },
                   {
                     "name": "EnrichedEntitiesCount",
@@ -99,19 +113,96 @@
                     "value": 0
                   },
                   {
+                    "name": "MaliciousEntityCount",
+                    "type": "integer",
+                    "value": 0
+                  },
+                  {
+                    "name": "EntityFindings",
+                    "type": "string",
+                    "value": ""
+                  },
+                  {
                     "name": "FindingsSummary",
                     "type": "string",
                     "value": "Initial Sentinel Phishing Triage Analysis initiated."
+                  },
+                  {
+                    "name": "VT_ApiKey",
+                    "type": "string",
+                    "value": "@parameters('VirusTotalApiKey')"
                   }
                 ]
               },
               "runAfter": {}
             },
+            "Resolve_VT_Key": {
+              "type": "Scope",
+              "runAfter": {
+                "Initialize_Triage_Variables": [
+                  "Succeeded"
+                ]
+              },
+              "actions": {
+                "Check_KeyVault_Configured": {
+                  "type": "If",
+                  "expression": {
+                    "and": [
+                      {
+                        "not": {
+                          "equals": [
+                            "@parameters('KeyVaultName')",
+                            ""
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "actions": {
+                    "Get_VT_Key_From_KeyVault": {
+                      "type": "Http",
+                      "inputs": {
+                        "method": "GET",
+                        "uri": "@concat('https://', parameters('KeyVaultName'), '.vault.azure.net/secrets/VirusTotalApiKey?api-version=7.4')",
+                        "authentication": {
+                          "type": "ManagedServiceIdentity",
+                          "audience": "https://vault.azure.net"
+                        }
+                      },
+                      "runtimeConfiguration": {
+                        "secureData": {
+                          "inputs": true,
+                          "outputs": true
+                        }
+                      },
+                      "runAfter": {}
+                    },
+                    "Set_VT_Key_From_KeyVault": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "VT_ApiKey",
+                        "value": "@body('Get_VT_Key_From_KeyVault')?['value']"
+                      },
+                      "runAfter": {
+                        "Get_VT_Key_From_KeyVault": [
+                          "Succeeded"
+                        ]
+                      }
+                    }
+                  },
+                  "else": {
+                    "actions": {}
+                  },
+                  "runAfter": {}
+                }
+              }
+            },
             "Evaluate_Heuristics_and_VT": {
               "type": "Scope",
               "runAfter": {
-                "Initialize_Triage_Verdict": [
-                  "Succeeded"
+                "Resolve_VT_Key": [
+                  "Succeeded",
+                  "Failed"
                 ]
               },
               "actions": {
@@ -122,7 +213,7 @@
                       {
                         "not": {
                           "equals": [
-                            "[parameters('VirusTotalApiKey')]",
+                            "@variables('VT_ApiKey')",
                             ""
                           ]
                         }
@@ -133,6 +224,11 @@
                     "For_Each_Incident_Entity": {
                       "type": "Foreach",
                       "foreach": "@coalesce(triggerBody()?['object']?['properties']?['relatedEntities'], json('[]'))",
+                      "runtimeConfiguration": {
+                        "concurrency": {
+                          "repetitions": 1
+                        }
+                      },
                       "actions": {
                         "Switch_Entity_Kind": {
                           "type": "Switch",
@@ -147,33 +243,98 @@
                                     "method": "GET",
                                     "uri": "@concat('https://www.virustotal.com/api/v3/files/', coalesce(item()?['properties']?['fileHashValue'], item()?['properties']?['hashValue']))",
                                     "headers": {
-                                      "x-apikey": "[parameters('VirusTotalApiKey')]"
+                                      "x-apikey": "@variables('VT_ApiKey')"
+                                    }
+                                  },
+                                  "runtimeConfiguration": {
+                                    "secureData": {
+                                      "inputs": true,
+                                      "outputs": true
                                     }
                                   },
                                   "runAfter": {}
                                 },
-                                "Increment_Enriched_Count_File": {
-                                  "type": "IncrementVariable",
-                                  "inputs": {
-                                    "name": "EnrichedEntitiesCount",
-                                    "value": 1
+                                "Check_VT_FileHash_Status": {
+                                  "type": "If",
+                                  "expression": {
+                                    "and": [
+                                      {
+                                        "equals": [
+                                          "@actions('Query_VT_FileHash')['status']",
+                                          "Succeeded"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "actions": {
+                                    "Increment_Enriched_Count_File": {
+                                      "type": "IncrementVariable",
+                                      "inputs": {
+                                        "name": "EnrichedEntitiesCount",
+                                        "value": 1
+                                      },
+                                      "runAfter": {}
+                                    },
+                                    "Check_FileHash_Malicious": {
+                                      "type": "If",
+                                      "expression": {
+                                        "and": [
+                                          {
+                                            "greater": [
+                                              "@coalesce(body('Query_VT_FileHash')?['data']?['attributes']?['last_analysis_stats']?['malicious'], 0)",
+                                              0
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      "actions": {
+                                        "Increment_Malicious_Count_File": {
+                                          "type": "IncrementVariable",
+                                          "inputs": {
+                                            "name": "MaliciousEntityCount",
+                                            "value": 1
+                                          },
+                                          "runAfter": {}
+                                        }
+                                      },
+                                      "else": {
+                                        "actions": {}
+                                      },
+                                      "runAfter": {
+                                        "Increment_Enriched_Count_File": [
+                                          "Succeeded"
+                                        ]
+                                      }
+                                    },
+                                    "Append_FileHash_Finding_Success": {
+                                      "type": "AppendToStringVariable",
+                                      "inputs": {
+                                        "name": "EntityFindings",
+                                        "value": "@concat('- FileHash ', coalesce(item()?['properties']?['fileHashValue'], item()?['properties']?['hashValue']), ': ', string(coalesce(body('Query_VT_FileHash')?['data']?['attributes']?['last_analysis_stats']?['malicious'], 0)), '/', string(add(add(add(coalesce(body('Query_VT_FileHash')?['data']?['attributes']?['last_analysis_stats']?['malicious'], 0), coalesce(body('Query_VT_FileHash')?['data']?['attributes']?['last_analysis_stats']?['suspicious'], 0)), coalesce(body('Query_VT_FileHash')?['data']?['attributes']?['last_analysis_stats']?['harmless'], 0)), coalesce(body('Query_VT_FileHash')?['data']?['attributes']?['last_analysis_stats']?['undetected'], 0))), ' engines flagged\n')"
+                                      },
+                                      "runAfter": {
+                                        "Check_FileHash_Malicious": [
+                                          "Succeeded"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "else": {
+                                    "actions": {
+                                      "Append_FileHash_Finding_Failed": {
+                                        "type": "AppendToStringVariable",
+                                        "inputs": {
+                                          "name": "EntityFindings",
+                                          "value": "@concat('- FileHash ', coalesce(item()?['properties']?['fileHashValue'], item()?['properties']?['hashValue']), ': VT lookup failed / not found\n')"
+                                        },
+                                        "runAfter": {}
+                                      }
+                                    }
                                   },
                                   "runAfter": {
                                     "Query_VT_FileHash": [
                                       "Succeeded",
                                       "Failed"
-                                    ]
-                                  }
-                                },
-                                "Set_Verdict_Malicious_File": {
-                                  "type": "SetVariable",
-                                  "inputs": {
-                                    "name": "Verdict",
-                                    "value": "Malicious"
-                                  },
-                                  "runAfter": {
-                                    "Increment_Enriched_Count_File": [
-                                      "Succeeded"
                                     ]
                                   }
                                 }
@@ -188,16 +349,93 @@
                                     "method": "GET",
                                     "uri": "@concat('https://www.virustotal.com/api/v3/ip_addresses/', item()?['properties']?['address'])",
                                     "headers": {
-                                      "x-apikey": "[parameters('VirusTotalApiKey')]"
+                                      "x-apikey": "@variables('VT_ApiKey')"
+                                    }
+                                  },
+                                  "runtimeConfiguration": {
+                                    "secureData": {
+                                      "inputs": true,
+                                      "outputs": true
                                     }
                                   },
                                   "runAfter": {}
                                 },
-                                "Increment_Enriched_Count_IP": {
-                                  "type": "IncrementVariable",
-                                  "inputs": {
-                                    "name": "EnrichedEntitiesCount",
-                                    "value": 1
+                                "Check_VT_IP_Status": {
+                                  "type": "If",
+                                  "expression": {
+                                    "and": [
+                                      {
+                                        "equals": [
+                                          "@actions('Query_VT_IP')['status']",
+                                          "Succeeded"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "actions": {
+                                    "Increment_Enriched_Count_IP": {
+                                      "type": "IncrementVariable",
+                                      "inputs": {
+                                        "name": "EnrichedEntitiesCount",
+                                        "value": 1
+                                      },
+                                      "runAfter": {}
+                                    },
+                                    "Check_IP_Malicious": {
+                                      "type": "If",
+                                      "expression": {
+                                        "and": [
+                                          {
+                                            "greater": [
+                                              "@coalesce(body('Query_VT_IP')?['data']?['attributes']?['last_analysis_stats']?['malicious'], 0)",
+                                              0
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      "actions": {
+                                        "Increment_Malicious_Count_IP": {
+                                          "type": "IncrementVariable",
+                                          "inputs": {
+                                            "name": "MaliciousEntityCount",
+                                            "value": 1
+                                          },
+                                          "runAfter": {}
+                                        }
+                                      },
+                                      "else": {
+                                        "actions": {}
+                                      },
+                                      "runAfter": {
+                                        "Increment_Enriched_Count_IP": [
+                                          "Succeeded"
+                                        ]
+                                      }
+                                    },
+                                    "Append_IP_Finding_Success": {
+                                      "type": "AppendToStringVariable",
+                                      "inputs": {
+                                        "name": "EntityFindings",
+                                        "value": "@concat('- IP ', coalesce(item()?['properties']?['address'], 'unknown'), ': ', string(coalesce(body('Query_VT_IP')?['data']?['attributes']?['last_analysis_stats']?['malicious'], 0)), '/', string(add(add(add(coalesce(body('Query_VT_IP')?['data']?['attributes']?['last_analysis_stats']?['malicious'], 0), coalesce(body('Query_VT_IP')?['data']?['attributes']?['last_analysis_stats']?['suspicious'], 0)), coalesce(body('Query_VT_IP')?['data']?['attributes']?['last_analysis_stats']?['harmless'], 0)), coalesce(body('Query_VT_IP')?['data']?['attributes']?['last_analysis_stats']?['undetected'], 0))), ' engines flagged\n')"
+                                      },
+                                      "runAfter": {
+                                        "Check_IP_Malicious": [
+                                          "Succeeded"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "else": {
+                                    "actions": {
+                                      "Append_IP_Finding_Failed": {
+                                        "type": "AppendToStringVariable",
+                                        "inputs": {
+                                          "name": "EntityFindings",
+                                          "value": "@concat('- IP ', coalesce(item()?['properties']?['address'], 'unknown'), ': VT lookup failed / not found\n')"
+                                        },
+                                        "runAfter": {}
+                                      }
+                                    }
                                   },
                                   "runAfter": {
                                     "Query_VT_IP": [
@@ -211,13 +449,106 @@
                             "Case_URL": {
                               "case": "url",
                               "actions": {
-                                "Increment_Enriched_Count_URL": {
-                                  "type": "IncrementVariable",
+                                "Query_VT_URL": {
+                                  "type": "Http",
                                   "inputs": {
-                                    "name": "EnrichedEntitiesCount",
-                                    "value": 1
+                                    "method": "GET",
+                                    "uri": "@concat('https://www.virustotal.com/api/v3/urls/', replace(replace(replace(base64(coalesce(item()?['properties']?['url'], '')), '+', '-'), '/', '_'), '=', ''))",
+                                    "headers": {
+                                      "x-apikey": "@variables('VT_ApiKey')"
+                                    }
+                                  },
+                                  "runtimeConfiguration": {
+                                    "secureData": {
+                                      "inputs": true,
+                                      "outputs": true
+                                    }
                                   },
                                   "runAfter": {}
+                                },
+                                "Check_VT_URL_Status": {
+                                  "type": "If",
+                                  "expression": {
+                                    "and": [
+                                      {
+                                        "equals": [
+                                          "@actions('Query_VT_URL')['status']",
+                                          "Succeeded"
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  "actions": {
+                                    "Increment_Enriched_Count_URL": {
+                                      "type": "IncrementVariable",
+                                      "inputs": {
+                                        "name": "EnrichedEntitiesCount",
+                                        "value": 1
+                                      },
+                                      "runAfter": {}
+                                    },
+                                    "Check_URL_Malicious": {
+                                      "type": "If",
+                                      "expression": {
+                                        "and": [
+                                          {
+                                            "greater": [
+                                              "@coalesce(body('Query_VT_URL')?['data']?['attributes']?['last_analysis_stats']?['malicious'], 0)",
+                                              0
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      "actions": {
+                                        "Increment_Malicious_Count_URL": {
+                                          "type": "IncrementVariable",
+                                          "inputs": {
+                                            "name": "MaliciousEntityCount",
+                                            "value": 1
+                                          },
+                                          "runAfter": {}
+                                        }
+                                      },
+                                      "else": {
+                                        "actions": {}
+                                      },
+                                      "runAfter": {
+                                        "Increment_Enriched_Count_URL": [
+                                          "Succeeded"
+                                        ]
+                                      }
+                                    },
+                                    "Append_URL_Finding_Success": {
+                                      "type": "AppendToStringVariable",
+                                      "inputs": {
+                                        "name": "EntityFindings",
+                                        "value": "@concat('- URL ', coalesce(item()?['properties']?['url'], 'unknown'), ': ', string(coalesce(body('Query_VT_URL')?['data']?['attributes']?['last_analysis_stats']?['malicious'], 0)), '/', string(add(add(add(coalesce(body('Query_VT_URL')?['data']?['attributes']?['last_analysis_stats']?['malicious'], 0), coalesce(body('Query_VT_URL')?['data']?['attributes']?['last_analysis_stats']?['suspicious'], 0)), coalesce(body('Query_VT_URL')?['data']?['attributes']?['last_analysis_stats']?['harmless'], 0)), coalesce(body('Query_VT_URL')?['data']?['attributes']?['last_analysis_stats']?['undetected'], 0))), ' engines flagged\n')"
+                                      },
+                                      "runAfter": {
+                                        "Check_URL_Malicious": [
+                                          "Succeeded"
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  "else": {
+                                    "actions": {
+                                      "Append_URL_Finding_Failed": {
+                                        "type": "AppendToStringVariable",
+                                        "inputs": {
+                                          "name": "EntityFindings",
+                                          "value": "@concat('- URL ', coalesce(item()?['properties']?['url'], 'unknown'), ': VT lookup failed / not found\n')"
+                                        },
+                                        "runAfter": {}
+                                      }
+                                    }
+                                  },
+                                  "runAfter": {
+                                    "Query_VT_URL": [
+                                      "Succeeded",
+                                      "Failed"
+                                    ]
+                                  }
                                 }
                               }
                             }
@@ -229,26 +560,57 @@
                         }
                       },
                       "runAfter": {}
+                    },
+                    "Set_Triage_Verdict": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "Verdict",
+                        "value": "@if(greater(variables('MaliciousEntityCount'), 0), 'Malicious', if(greater(variables('EnrichedEntitiesCount'), 0), 'Likely Benign', 'Not enriched'))"
+                      },
+                      "runAfter": {
+                        "For_Each_Incident_Entity": [
+                          "Succeeded"
+                        ]
+                      }
+                    },
+                    "Update_Findings_Summary": {
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "FindingsSummary",
+                        "value": "@concat('[Automated SOAR Triage]\n- Incident: ', coalesce(triggerBody()?['object']?['properties']?['title'], 'Phishing Incident'), '\n- Severity: ', coalesce(triggerBody()?['object']?['properties']?['severity'], 'Medium'), '\n- Automated Verdict: ', variables('Verdict'), '\n- Entities enriched: ', string(variables('EnrichedEntitiesCount')), ', flagged malicious: ', string(variables('MaliciousEntityCount')), if(empty(variables('EntityFindings')), '', concat('\n\nEntity Findings:\n', variables('EntityFindings'))))"
+                      },
+                      "runAfter": {
+                        "Set_Triage_Verdict": [
+                          "Succeeded"
+                        ]
+                      }
                     }
                   },
                   "else": {
-                    "actions": {}
+                    "actions": {
+                      "Set_Verdict_Not_Enriched": {
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "Verdict",
+                          "value": "Not enriched"
+                        },
+                        "runAfter": {}
+                      },
+                      "Update_Findings_Summary_No_Key": {
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "FindingsSummary",
+                          "value": "@concat('[Automated SOAR Triage]\n- Incident: ', coalesce(triggerBody()?['object']?['properties']?['title'], 'Phishing Incident'), '\n- Severity: ', coalesce(triggerBody()?['object']?['properties']?['severity'], 'Medium'), '\n- Automated Verdict: ', variables('Verdict'), '\n- VirusTotal enrichment skipped: no API key configured')"
+                        },
+                        "runAfter": {
+                          "Set_Verdict_Not_Enriched": [
+                            "Succeeded"
+                          ]
+                        }
+                      }
+                    }
                   },
                   "runAfter": {}
-                },
-                "Update_Findings_Summary": {
-                  "type": "SetVariable",
-                  "inputs": {
-                    "name": "FindingsSummary",
-                    "value": "@concat('[Automated SOAR Triage]\n- Incident: ', coalesce(triggerBody()?['object']?['properties']?['title'], 'Phishing Incident'), '\n- Severity: ', coalesce(triggerBody()?['object']?['properties']?['severity'], 'Medium'), '\n- Automated Verdict: ', variables('Verdict'), '\n- Dynamic Entities Enriched: ', string(variables('EnrichedEntitiesCount')), '\n- Threat Intel: VirusTotal v3 inspection completed across incident entities.')"
-                  },
-                  "runAfter": {
-                    "Check_VT_Key_Provided": [
-                      "Succeeded",
-                      "Skipped",
-                      "Failed"
-                    ]
-                  }
                 }
               }
             },
@@ -281,7 +643,7 @@
                   {
                     "not": {
                       "equals": [
-                        "[parameters('TeamsWebhookUrl')]",
+                        "@parameters('TeamsWebhookUrl')",
                         ""
                       ]
                     }
@@ -293,7 +655,7 @@
                   "type": "Http",
                   "inputs": {
                     "method": "POST",
-                    "uri": "[parameters('TeamsWebhookUrl')]",
+                    "uri": "@parameters('TeamsWebhookUrl')",
                     "headers": {
                       "Content-Type": "application/json"
                     },
@@ -318,11 +680,11 @@
                                 "facts": [
                                   {
                                     "title": "Incident Title:",
-                                    "value": "@{triggerBody()?['object']?['properties']?['title']}"
+                                    "value": "@{coalesce(triggerBody()?['object']?['properties']?['title'], 'Phishing Incident')}"
                                   },
                                   {
                                     "title": "Severity:",
-                                    "value": "@{triggerBody()?['object']?['properties']?['severity']}"
+                                    "value": "@{coalesce(triggerBody()?['object']?['properties']?['severity'], 'Medium')}"
                                   },
                                   {
                                     "title": "Automated Verdict:",
@@ -330,11 +692,15 @@
                                   },
                                   {
                                     "title": "Entities Enriched:",
-                                    "value": "@{variables('EnrichedEntitiesCount')}"
+                                    "value": "@{string(variables('EnrichedEntitiesCount'))}"
+                                  },
+                                  {
+                                    "title": "Entities Flagged:",
+                                    "value": "@{string(variables('MaliciousEntityCount'))}"
                                   },
                                   {
                                     "title": "Incident URL:",
-                                    "value": "@{triggerBody()?['object']?['properties']?['incidentUrl']}"
+                                    "value": "@{coalesce(triggerBody()?['object']?['properties']?['incidentUrl'], 'N/A')}"
                                   }
                                 ]
                               },
@@ -343,10 +709,23 @@
                                 "text": "@{variables('FindingsSummary')}",
                                 "wrap": true
                               }
+                            ],
+                            "actions": [
+                              {
+                                "type": "Action.OpenUrl",
+                                "title": "Open incident",
+                                "url": "@{coalesce(triggerBody()?['object']?['properties']?['incidentUrl'], 'https://portal.azure.com')}"
+                              }
                             ]
                           }
                         }
                       ]
+                    }
+                  },
+                  "runtimeConfiguration": {
+                    "secureData": {
+                      "inputs": true,
+                      "outputs": true
                     }
                   }
                 }
@@ -373,6 +752,15 @@
                 "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
               }
             }
+          },
+          "KeyVaultName": {
+            "value": "[parameters('KeyVaultName')]"
+          },
+          "TeamsWebhookUrl": {
+            "value": "[parameters('TeamsWebhookUrl')]"
+          },
+          "VirusTotalApiKey": {
+            "value": "[parameters('VirusTotalApiKey')]"
           }
         }
       }
