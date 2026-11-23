@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-and-triage:
+    name: Run Unit Tests & Triage Engine
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run unit tests
+        run: |
+          python -m unittest tests/test_phish_triage.py -v
+
+      - name: Execute phishing triage on lab samples
+        run: |
+          python phish_triage.py samples/*.eml -o reports
+
+      - name: Validate Azure Sentinel ARM template JSON
+        run: |
+          python -c "import json; json.load(open('playbook/azuredeploy.json', encoding='utf-8')); print('ARM Template is valid JSON!')"

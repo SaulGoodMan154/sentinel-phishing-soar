@@ -1,5 +1,10 @@
 # SOAR Phishing Triage Automation
 
+[![CI](https://github.com/SaulGoodMan154/sentinel-phishing-soar/actions/workflows/test.yml/badge.svg)](https://github.com/SaulGoodMan154/sentinel-phishing-soar/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Microsoft Sentinel](https://img.shields.io/badge/Microsoft_Sentinel-SOAR_Playbook-0078D4?logo=microsoftazure)](playbook/azuredeploy.json)
+
 Local `.eml` triage tool + Microsoft Sentinel Logic Apps playbook that enriches incidents with VirusTotal and posts a Teams notification.
 
 ## Architecture

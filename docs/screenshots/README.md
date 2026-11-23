@@ -1,4 +1,4 @@
-# Screenshot Placeholders & Portfolio Proof
+# Verification & Portfolio Evidence
 
 This directory holds visual proof and documentation screenshots for the SOAR Phishing Triage system:
 
