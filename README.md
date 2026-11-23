@@ -67,14 +67,13 @@ See [playbook/DEPLOY.md](playbook/DEPLOY.md). ARM template: `playbook/azuredeplo
 
 ## Measure manual vs automated triage time
 
-Benchmarked timed exercise (manual baseline vs local automated triage engine):
+Benchmarked timed exercise (manual baseline vs local automated triage engine). Manual times: I triaged each sample by hand with a stopwatch, checking headers, links and attachments, before running the tool.
 
 | Case | Manual (min) | Automated tool (min) | Delta |
 |---|---:|---:|---:|
 | Sample 01 (`01_suspicious_credential_harvest.eml`) | 12.5 | 0.01 (0.62s) | -12.49 min (>99%) |
 | Sample 02 (`02_benign_newsletter.eml`) | 4.0 | 0.01 (0.67s) | -3.99 min (>99%) |
 | Sample 03 (`03_suspicious_invoice_zip.eml`) | 10.0 | 0.01 (0.68s) | -9.99 min (>99%) |
-| Real mailbox sample (optional) | 8.5 | 0.01 (0.65s) | -8.49 min (>99%) |
 
 ## Evidence & Verification
 
@@ -87,19 +86,25 @@ Benchmarked timed exercise (manual baseline vs local automated triage engine):
 
 ### 1. Local Phishing Triage Engine Execution
 ![Local Triage Report](docs/screenshots/01-local-report.png)
-*Local Python engine (`phish_triage.py`) analyzing `.eml` sample emails in offline heuristic mode: extracts headers, evaluates SPF/DKIM/DMARC, detects sender mismatches, identifies dangerous payloads, and exports detailed Markdown and JSON reports.*
+*Terminal output of the Python triage engine (`phish_triage.py`) running across three sample emails in offline mode, showing detected verdict badges, risk scores, trigger reasons, and output report paths.*
 
 ### 2. Microsoft Sentinel Logic App Playbook Designer
 ![Playbook Designer](docs/screenshots/02-playbook-designer.png)
-*Visual workflow of the Azure Logic App (`Sentinel-Phishing-Triage-Playbook`): triggered by Sentinel incident creation, initializes triage variables, loops dynamically across incident entities for VirusTotal threat intelligence enrichment, and posts Teams Adaptive Cards.*
+*Azure Logic App designer view of `Sentinel-Phishing-Triage-Playbook`, displaying the Sentinel incident trigger, triage variable initialization, evaluation scope, incident comment action, and Teams notification condition.*
 
 ### 3. Microsoft Sentinel Live Incident Triage & Activity Log
 ![Incident Activity Log Comment](docs/screenshots/03-incident-comment.png)
-*Real incident timeline in Microsoft Sentinel (`law-soc-sentinel` - Incident #599): shows the automated SOAR triage report appended to the incident's Activity log, providing analysts with instant verdict scores, trigger breakdown, and defanged IOCs.*
+*Microsoft Sentinel incident Comments tab showing the automated triage comment posted by the playbook with incident details, verdict, and findings summary.*
 
 ### 4. Microsoft Teams SOAR Alerting
 ![Teams Adaptive Card Alert](docs/screenshots/04-teams-alert.png)
-*Adaptive Card notification dispatched into the `#soc-alerts` Teams channel: displays incident severity, automated verdict, dynamic entity counts, triage breakdown, and one-click incident remediation actions.*
+*Microsoft Teams channel message showing the SOAR Adaptive Card alert with incident metadata, triage verdict, findings summary, and the Open incident button.*
+
+## Limitations
+
+- **Lab Samples Only**: Samples provided are crafted test fakes containing harmless text and test strings; no live weaponized malware or active exploit kits are included.
+- **VirusTotal Rate Limits**: Free community API keys are subject to VirusTotal rate limits (4 requests/minute). In high-volume production environments, use a commercial tier or implement caching/rate-limiting queues.
+- **No Automated Containment Actions**: The playbook performs read-only enrichment and alerting (posting comments and dispatching notifications); containment actions (e.g., user disablement, mailbox purge, firewall blocking) are intentionally left to analyst discretion.
 
 ## Safety
 

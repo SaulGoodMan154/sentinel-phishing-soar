@@ -3,17 +3,13 @@
 This directory holds visual proof and documentation screenshots for the SOAR Phishing Triage system:
 
 1. **`01-local-report.png`**:
-   - Screenshot of the local Python terminal triage execution (`python phish_triage.py samples/*.eml -o reports`) showing the colorized status output and generated Markdown report.
+   - Terminal output of the Python triage engine (`phish_triage.py`) running across three sample emails in offline mode, showing detected verdict badges, risk scores, trigger reasons, and output report paths.
 
 2. **`02-playbook-designer.png`**:
-   - Screenshot of the Azure Logic App Designer in the Azure Portal showing the workflow steps:
-     - Incident Trigger
-     - VirusTotal Enrichment
-     - Sentinel Incident Comment
-     - Microsoft Teams Adaptive Card Action
+   - Azure Logic App designer view of `Sentinel-Phishing-Triage-Playbook`, displaying the Sentinel incident trigger, triage variable initialization, evaluation scope, incident comment action, and Teams notification condition.
 
 3. **`03-incident-comment.png`**:
-   - Screenshot of a Microsoft Sentinel incident activity log showing the automated triage comment posted by the Logic App playbook.
+   - Microsoft Sentinel incident Comments tab showing the automated triage comment posted by the playbook with incident details, verdict, and findings summary.
 
 4. **`04-teams-alert.png`**:
-   - Screenshot of the Microsoft Teams channel showing the Adaptive Card triage notification with verdict, severity, and defanged indicators.
+   - Microsoft Teams channel message showing the SOAR Adaptive Card alert with incident metadata, triage verdict, findings summary, and the Open incident button.
