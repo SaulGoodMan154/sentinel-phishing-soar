@@ -171,8 +171,10 @@
                       },
                       "runtimeConfiguration": {
                         "secureData": {
-                          "inputs": true,
-                          "outputs": true
+                          "properties": [
+                            "inputs",
+                            "outputs"
+                          ]
                         }
                       },
                       "runAfter": {}
@@ -248,8 +250,10 @@
                                   },
                                   "runtimeConfiguration": {
                                     "secureData": {
-                                      "inputs": true,
-                                      "outputs": true
+                                      "properties": [
+                                        "inputs",
+                                        "outputs"
+                                      ]
                                     }
                                   },
                                   "runAfter": {}
@@ -354,8 +358,10 @@
                                   },
                                   "runtimeConfiguration": {
                                     "secureData": {
-                                      "inputs": true,
-                                      "outputs": true
+                                      "properties": [
+                                        "inputs",
+                                        "outputs"
+                                      ]
                                     }
                                   },
                                   "runAfter": {}
@@ -460,8 +466,10 @@
                                   },
                                   "runtimeConfiguration": {
                                     "secureData": {
-                                      "inputs": true,
-                                      "outputs": true
+                                      "properties": [
+                                        "inputs",
+                                        "outputs"
+                                      ]
                                     }
                                   },
                                   "runAfter": {}
@@ -724,8 +732,10 @@
                   },
                   "runtimeConfiguration": {
                     "secureData": {
-                      "inputs": true,
-                      "outputs": true
+                      "properties": [
+                        "inputs",
+                        "outputs"
+                      ]
                     }
                   }
                 }
