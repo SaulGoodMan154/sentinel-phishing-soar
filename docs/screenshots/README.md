@@ -11,5 +11,5 @@ This directory holds visual proof and documentation screenshots for the SOAR Phi
 3. **`03-incident-comment.png`**:
    - Microsoft Sentinel incident Comments tab showing the automated triage comment posted by the playbook with incident details, verdict, and findings summary.
 
-4. **`04-teams-alert.png`**:
-   - Microsoft Teams channel message showing the SOAR Adaptive Card alert with incident metadata, triage verdict, findings summary, and the Open incident button.
+4. **Teams Alerting**:
+   - Teams notification configured, not demoed. The playbook includes the full Adaptive Card definition and HTTP dispatch action via the optional `TeamsWebhookUrl` parameter.

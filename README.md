@@ -83,7 +83,7 @@ Benchmarked timed exercise (manual baseline vs local automated triage engine). M
 | Playbook Workflow Designer | :white_check_mark: Completed | [View](docs/screenshots/02-playbook-designer.png) |
 | Playbook Run History | :white_check_mark: Completed | [View](docs/screenshots/02b-run-history.png) |
 | Sentinel Incident Comment | :white_check_mark: Completed | [View](docs/screenshots/03-incident-comment.png) |
-| Teams Adaptive Card Alert | :white_check_mark: Completed | [View](docs/screenshots/04-teams-alert.png) |
+| Teams Adaptive Card Alert | :gear: Configured (Not demoed) | *Optional Webhook parameter* |
 
 ### 1. Local Phishing Triage Engine Execution
 ![Local Triage Report](docs/screenshots/01-local-report.png)
@@ -101,8 +101,7 @@ Benchmarked timed exercise (manual baseline vs local automated triage engine). M
 *Microsoft Sentinel incident Comments tab showing the automated triage comment posted by the playbook with incident details, verdict, and findings summary.*
 
 ### 4. Microsoft Teams SOAR Alerting
-![Teams Adaptive Card Alert](docs/screenshots/04-teams-alert.png)
-*Microsoft Teams channel message showing the SOAR Adaptive Card alert with incident metadata, triage verdict, findings summary, and the Open incident button.*
+*Teams notification configured, not demoed. The playbook includes the full Adaptive Card definition and HTTP dispatch action via the optional `TeamsWebhookUrl` parameter.*
 
 ## Limitations
 
