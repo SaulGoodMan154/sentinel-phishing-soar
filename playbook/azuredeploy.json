@@ -43,10 +43,6 @@
       "properties": {
         "displayName": "Sentinel Managed Identity Connection",
         "customParameterValues": {},
-        "parameterValueSet": {
-          "name": "managedIdentityAuth",
-          "values": {}
-        },
         "api": {
           "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
         }
@@ -627,23 +623,21 @@
               }
             },
             "Add_Incident_Comment": {
-              "type": "ApiConnection",
+              "type": "Http",
               "inputs": {
-                "host": {
-                  "connection": {
-                    "name": "@parameters('$connections')['azuresentinel']['connectionId']"
-                  }
+                "method": "PUT",
+                "uri": "@concat('https://management.azure.com', triggerBody()?['object']?['id'], '/comments/', guid(), '?api-version=2023-02-01')",
+                "headers": {
+                  "Content-Type": "application/json"
                 },
-                "connectionProperties": {
-                  "authentication": {
-                    "type": "ManagedServiceIdentity"
-                  }
-                },
-                "method": "post",
-                "path": "/Incidents/Comment",
                 "body": {
-                  "incidentArmId": "@triggerBody()?['object']?['id']",
-                  "message": "@variables('FindingsSummary')"
+                  "properties": {
+                    "message": "@variables('FindingsSummary')"
+                  }
+                },
+                "authentication": {
+                  "type": "ManagedServiceIdentity",
+                  "audience": "https://management.azure.com"
                 }
               },
               "runAfter": {
@@ -768,12 +762,7 @@
               "azuresentinel": {
                 "connectionId": "[resourceId('Microsoft.Web/connections', variables('sentinelConnectionName'))]",
                 "connectionName": "[variables('sentinelConnectionName')]",
-                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
-                "connectionProperties": {
-                  "authentication": {
-                    "type": "ManagedServiceIdentity"
-                  }
-                }
+                "id": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
               }
             }
           },
