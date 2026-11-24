@@ -81,6 +81,7 @@ Benchmarked timed exercise (manual baseline vs local automated triage engine). M
 |---|---|---|
 | Local Triage Engine | :white_check_mark: Completed | [View](docs/screenshots/01-local-report.png) |
 | Playbook Workflow Designer | :white_check_mark: Completed | [View](docs/screenshots/02-playbook-designer.png) |
+| Playbook Run History | :white_check_mark: Completed | [View](docs/screenshots/02b-run-history.png) |
 | Sentinel Incident Comment | :white_check_mark: Completed | [View](docs/screenshots/03-incident-comment.png) |
 | Teams Adaptive Card Alert | :white_check_mark: Completed | [View](docs/screenshots/04-teams-alert.png) |
 
@@ -88,9 +89,12 @@ Benchmarked timed exercise (manual baseline vs local automated triage engine). M
 ![Local Triage Report](docs/screenshots/01-local-report.png)
 *Terminal output of the Python triage engine (`phish_triage.py`) running across three sample emails in offline mode, showing detected verdict badges, risk scores, trigger reasons, and output report paths.*
 
-### 2. Microsoft Sentinel Logic App Playbook Designer
+### 2. Microsoft Sentinel Logic App Playbook Designer & Execution Run History
 ![Playbook Designer](docs/screenshots/02-playbook-designer.png)
 *Azure Logic App designer view of `Sentinel-Phishing-Triage-Playbook`, displaying the Sentinel incident trigger, triage variable initialization, evaluation scope, incident comment action, and Teams notification condition.*
+
+![Playbook Run History](docs/screenshots/02b-run-history.png)
+*Azure Logic App Run history view of a successful execution on an incident with 3 related entities, displaying sequential evaluation across FileHash, IP, and URL cases with VirusTotal enrichment and secure credential masking.*
 
 ### 3. Microsoft Sentinel Live Incident Triage & Activity Log
 ![Incident Activity Log Comment](docs/screenshots/03-incident-comment.png)
